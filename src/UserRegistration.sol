@@ -3,11 +3,11 @@ pragma solidity ^0.8.19;
 
 contract UserRegistration {
 
-    uint totalRenters;
+    uint public totalRenters;
 
     // Add a renter
     struct Renter {
-        address walletAddress;
+        address walletAddress; //address payable walletAddress;
         string name;
         bool canRent; 
         uint balance;
@@ -24,7 +24,7 @@ contract UserRegistration {
     }
 
     // Function to register a new user
-    function registerRenter (address payable _walletAddress, string memory _name) public {
+    function registerRenter (address _walletAddress, string memory _name) public {
         require(bytes(_name).length > 0, "Name cannot be empty");
         require(!renters[_walletAddress].isRegistered, "User already exists.");  
         
@@ -37,7 +37,7 @@ contract UserRegistration {
     // Get the details of a specific renter
     function getRenterDetails(address _walletAddress) public view returns (string memory name, bool canRent, 
     uint balance, bool isRegistered, uint nTrips){
-        Renter memory r = renters[_walletAddress]; //use memory instead of store to save gas, since you're only reading data and not modifying it
+        Renter memory r = renters[_walletAddress]; // calldata //use memory instead of store to save gas, since you're only reading data and not modifying it
         return (r.name, r.canRent, r.balance, r.isRegistered, r.nTrips); 
     }
 }

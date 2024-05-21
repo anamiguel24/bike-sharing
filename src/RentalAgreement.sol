@@ -2,17 +2,19 @@
 pragma solidity ^0.8.19;
 
 import "./UserRegistration.sol";
-import "./token/ERC20.sol";
+import "./BikeRegistration.sol";
+import "./USDT.sol";
 
 contract RentalBike {
     address owner;
     UserRegistration userRegistration;
+    BikeRegistration bikeRegistration;
     ERC20 public usdtContract; // MyUSDT contract interface
 
-
-    constructor(address _usdtContract, address _user) {
+    constructor(address _usdtContract, address _user, address _bikeContract) {
         owner = msg.sender;
         userRegistration = UserRegistration(_user);
+        bikeRegistration = BikeRegistration(_bikeContract);
         usdtContract = ERC20(_usdtContract);
     }
 
@@ -23,6 +25,7 @@ contract RentalBike {
 
     struct Rental {
         uint rentalId;
+        uint bike;
         address renterAddress;  // Address of the renter
         uint balance;
         uint256 startDate;      // Start time of the rental agreement (timestamp)
@@ -37,19 +40,27 @@ contract RentalBike {
     uint public latestRentalId = 0;
     uint256[] public rentalIds;   // Array that will hold all the rental ids, so we can easily access them later on
 
-
     // function that allows a renter rent a bike
-    function rentABike(uint _amount) public {
-        // check if the renter is registered and if the bike is available
+    function rentABike(uint _amount, uint _bike) public {
+        
         (, , , bool isRegistered,) = userRegistration.getRenterDetails(msg.sender);
-        require(isRegistered, "Renter is not registered.You need to be registered first!");
+        // check if the renter is registered and if the bike is available
+        require(isRegistered, "Renter is not registered. You need to be registered first!");
+        
+        (, , , , address currentRenter , uint256 rentalStartTime, , bool isAvailable, ,) = bikeRegistration.getBikeDetails(_bike);
+        // check if the bike is available
+        require(isAvailable, "Bike is not available. You need to choose another bike!");
 
         // Transfer USDT tokens to this contract
         require(usdtContract.transferFrom(msg.sender, address(this), _amount), "USDT transfer failed");
 
+        currentRenter = msg.sender;
+        rentalStartTime = block.timestamp;
+        isAvailable = false;
+
         // create a new rental record
         rentalIds.push(latestRentalId);
-        rentals[latestRentalId] = Rental(latestRentalId, msg.sender, _amount, block.timestamp, 0, 1, 0, true);
+        rentals[latestRentalId] = Rental(latestRentalId, _bike, msg.sender, _amount, block.timestamp, 0, 1, 0, true);
 
         // update the number of active rentals
         numberOfRentals++;
@@ -58,13 +69,17 @@ contract RentalBike {
     }
 
     // function that returns a bike to be used again
-    function returnABike(uint _rentalId, address _serviceOwner) public {
+    function returnABike(uint _rentalId, address _serviceOwner, uint _bike, string memory _stationCoordinates) public {
         Rental storage rental = rentals[_rentalId];
         require(rental.isActive, "Rental agreement is not active");
         (, , , , uint nTrips) = userRegistration.getRenterDetails(msg.sender);
 
-        rental.endDate = block.timestamp;
+        (, , , address lastRenter, address currentRenter , , uint256 rentalEndTime, bool isAvailable, uint nBikeTrips,string memory stationCoordinates) = bikeRegistration.getBikeDetails(_bike);
+        // if the renter of the bike is the person who is trying to return the bike
+        // require(currentRenter == msg.sender, "Invalid user");
 
+        rental.endDate = block.timestamp;
+        
         // Calculate the rental fee. If it the 5th trip then it's free
         if (nTrips == 5){
             rental.pricePerHour = 0;
@@ -73,7 +88,7 @@ contract RentalBike {
             require(rental.endDate >= rental.startDate, "End date must be greater than or equal to start date");
             rental.rentalFee = ((rental.endDate - rental.startDate)/60) * rental.pricePerHour;
             // Transfer rental fee to serviceOwner
-            require(usdtContract.transfer(_serviceOwner, rentals[_rentalId].rentalFee), "USDT transfer failed");
+            require(usdtContract.transfer(_serviceOwner, rental.rentalFee), "USDT transfer failed");
             // Update remaining balance
             rental.balance -= rental.rentalFee;
         }
@@ -83,6 +98,18 @@ contract RentalBike {
             require(usdtContract.transfer(msg.sender, rental.balance), "USDT refund failed");
             rental.balance = 0;
         }
+
+        // update the last renter address and current renter address
+        lastRenter = msg.sender;
+        currentRenter = address(0);
+        // set the rental end time of the bike
+        rentalEndTime = block.timestamp;
+        // update the bike's availability status
+        isAvailable = true;
+        // update the number trip that the bike did
+        nBikeTrips++;
+        // set the station where the bike was returned
+        stationCoordinates = _stationCoordinates;
 
         // End rental agreement
         rental.isActive =  false;
