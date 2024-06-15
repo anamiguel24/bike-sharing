@@ -28,8 +28,8 @@ contract UserRegistrationTest is Test {
     }
 
     function testGetUser() public {
-        userRegistration.registerRenter(address(this), "Ana");
-        (string memory name, bool canRent, uint balance, bool isRegistered, uint nTrips) = userRegistration.getRenterDetails(address(this));
+        userRegistration.registerRenter(address(0), "Ana");
+        (string memory name, bool canRent, uint balance, bool isRegistered, uint nTrips) = userRegistration.getRenterDetails(address(0));
         assertEq(name, "Ana", "The user's name should be Ana");
         assertTrue(canRent, "The user should be able to rent");
         assertEq(balance, 0, "The user's balance should be 0");
