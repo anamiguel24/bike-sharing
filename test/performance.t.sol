@@ -14,8 +14,8 @@ contract PerformanceTest is Test {
     RentalBike private rentalAgreement;
 
     address private owner = address(1);
-    address private user1 = address(2);
-    address private user2 = address(3);
+    address private renter1 = address(2);
+    address private serviceOwner = address(3);
 
     function setUp() public {
         usdt = new USDT();
@@ -26,39 +26,63 @@ contract PerformanceTest is Test {
         usdt.approve(address(rentalAgreement), 30*10**18);
 
         // Register user and mint tokens
-        userRegistration.registerRenter(user1, "renter1");
-        usdt.mint(user1, 30 * 10**18);
-        userRegistration.registerRenter(user2, "User2");
-        usdt.mint(user2, 30 * 10**18);
+        userRegistration.registerRenter(renter1, "renter1");
+        usdt.mint(renter1, 30 * 10**18);
+        userRegistration.registerRenter(serviceOwner, "serviceOwner");
+        usdt.mint(serviceOwner, 30 * 10**18);
 
-        // Approve allowance from user1 for rentalAgreement
-        vm.startPrank(user1);
-        usdt.approve(address(rentalAgreement), 30*10**18);    
-        vm.stopPrank();
-    }
-
-    // Test the Gas usage for the rental process
-    function testGasUsageForRentingAndReturningBike() public {
-        vm.startPrank(owner);
+        // Add new bikes
         bikeRegistration.registerBike("Bike1", 2014, false, "Aveiro school");
         bikeRegistration.registerBike("Bike2", 2018, true, "Lisbon school");
-        vm.stopPrank();
 
-        // event log_named_uint("Gas used for renting a bike", gasUsedRent);
-        vm.startPrank(user1);
+        // Approve allowance from renter1 for rentalAgreement
+        /*vm.startPrank(renter1);
+        usdt.approve(address(rentalAgreement), 30*10**18);    
+        vm.stopPrank();*/
+    }
 
+    function testGasRentABike() public {
+        vm.startPrank(renter1);
+
+        // Approve USDT transfer for the rentalBike contract
+        usdt.approve(address(rentalAgreement), 30*10**18);
+
+        // Set up rentABike variables
         uint amount = 30000;
         uint bikeId = 0;
 
+        // Measure gas usage for renting a bike
         uint256 gasStart = gasleft();
         rentalAgreement.rentABike(amount, bikeId);
-        uint256 gasUsedRent = gasStart - gasleft();
-        emit log_named_uint("Gas used for renting a bike", gasUsedRent);
+        uint256 gasEnd = gasleft();
 
-        gasStart = gasleft();
-        rentalAgreement.returnABike(0, owner, 1, "Lisbon office");
-        uint256 gasUsedReturn = gasStart - gasleft();
-        emit log_named_uint("Gas used for returning a bike", gasUsedReturn);
+        uint256 gasUsed = gasStart - gasEnd;
+        console.log("Gas used for renting a bike:", gasUsed);
+
+        vm.stopPrank();
+    }
+
+    function testGasReturnABike() public {
+        vm.startPrank(renter1);
+
+        // Approve USDT transfer for the rentalBike contract
+        usdt.approve(address(rentalAgreement), 30*10**18);
+
+        // Set up rentABike variables
+        uint amount = 4500000;
+        uint bikeId = 1;
+
+        // Rent a bike first
+        rentalAgreement.rentABike(amount, bikeId);
+
+        // Measure gas usage for returning a bike
+        uint256 gasStart = gasleft();
+        rentalAgreement.returnABike(0, serviceOwner, 1, "51.509865,-0.118092");
+        uint256 gasEnd = gasleft();
+
+        uint256 gasUsed = gasStart - gasEnd;
+        console.log("Gas used for returning a bike:", gasUsed);
+
         vm.stopPrank();
     }
 
@@ -68,11 +92,15 @@ contract PerformanceTest is Test {
         bikeRegistration.registerBike("Bike1", 2014, false, "Aveiro school");
         vm.stopPrank();
 
+        vm.startPrank(renter1);
+        // Approve USDT transfer for the rentalBike contract
+        usdt.approve(address(rentalAgreement), 30*10**18);
+
         uint256 startTime = block.timestamp;
         uint rentalId = 0;
 
         for (uint256 i = 0; i < 200; i++) {
-            vm.startPrank(user1);
+            vm.startPrank(renter1);
             rentalAgreement.rentABike(1000, 0);
             rentalAgreement.returnABike(rentalId, owner, 0, "Lisbon office");
             vm.stopPrank();
@@ -82,32 +110,98 @@ contract PerformanceTest is Test {
         uint256 endTime = block.timestamp;
         uint256 duration = endTime - startTime;
         emit log_named_uint("Time taken for 100 rent and return transactions (seconds)", duration);
-    }
-
-    function testRentAndReturnBikes() public {
-        uint amount = 3;
-        bikeRegistration.registerBike("Bikex", 2014, false, "Aveiro school");
-
-        vm.startPrank(user1);
-        
-        // Measure time before transactions
-        uint256 startTime = block.timestamp;
-        
-        for (uint i = 0; i < 100; i++) {
-            rentalAgreement.rentABike(amount, 0);
-            rentalAgreement.returnABike(i, owner, 0, "Lisbon office");
-        }
-        
-        // Measure time after transactions
-        uint256 endTime = block.timestamp;
-        
-        uint256 timeTaken = endTime - startTime;
-        
-        console.log("Time taken for 100 rent and return transactions (seconds):", timeTaken);
-        
         vm.stopPrank();
     }
 
-    // scalability capacity, i.e. number of users and bikes that the system can support
-    // cost
+    function testGasRent50Bikes() public {
+        vm.startPrank(renter1);
+
+        // Approve USDT transfer for the rentalBike contract
+        usdt.approve(address(rentalAgreement), 30*10**18);
+
+        // Set up rentABike variables
+        uint amount = 4500000;
+        uint bikeId = 1;
+
+        // Measure gas usage for renting two hundred bikes
+        uint256 gasStart = gasleft();
+        for (uint i = 1; i <= 50; i++) {
+            rentalAgreement.rentABike(amount, bikeId);
+        }
+        uint256 gasEnd = gasleft();
+
+        uint256 gasUsed = gasStart - gasEnd;
+        console.log("Gas used for renting one hundred bikes:", gasUsed);
+
+        vm.stopPrank();
+    }
+
+    function testGasRent100Bikes() public {
+        vm.startPrank(renter1);
+
+        // Approve USDT transfer for the rentalBike contract
+        usdt.approve(address(rentalAgreement), 30*10**18);
+
+        // Set up rentABike variables
+        uint amount = 4500000;
+        uint bikeId = 1;
+
+        // Measure gas usage for renting one hundred bikes
+        uint256 gasStart = gasleft();
+        for (uint i = 1; i <= 100; i++) {
+            rentalAgreement.rentABike(amount, bikeId);
+        }
+        uint256 gasEnd = gasleft();
+
+        uint256 gasUsed = gasStart - gasEnd;
+        console.log("Gas used for renting one hundred bikes:", gasUsed);
+
+        vm.stopPrank();
+    }
+
+    function testGasRent150Bikes() public {
+        vm.startPrank(renter1);
+
+        // Approve USDT transfer for the rentalBike contract
+        usdt.approve(address(rentalAgreement), 30*10**18);
+
+        // Set up rentABike variables
+        uint amount = 4500000;
+        uint bikeId = 1;
+
+        // Measure gas usage for renting two hundred bikes
+        uint256 gasStart = gasleft();
+        for (uint i = 1; i <= 150; i++) {
+            rentalAgreement.rentABike(amount, bikeId);
+        }
+        uint256 gasEnd = gasleft();
+
+        uint256 gasUsed = gasStart - gasEnd;
+        console.log("Gas used for renting one hundred bikes:", gasUsed);
+
+        vm.stopPrank();
+    }
+
+    function testGasRent200Bikes() public {
+        vm.startPrank(renter1);
+
+        // Approve USDT transfer for the rentalBike contract
+        usdt.approve(address(rentalAgreement), 30*10**18);
+
+        // Set up rentABike variables
+        uint amount = 4500000;
+        uint bikeId = 1;
+
+        // Measure gas usage for renting two hundred bikes
+        uint256 gasStart = gasleft();
+        for (uint i = 1; i <= 200; i++) {
+            rentalAgreement.rentABike(amount, bikeId);
+        }
+        uint256 gasEnd = gasleft();
+
+        uint256 gasUsed = gasStart - gasEnd;
+        console.log("Gas used for renting one hundred bikes:", gasUsed);
+
+        vm.stopPrank();
+    }
 }
